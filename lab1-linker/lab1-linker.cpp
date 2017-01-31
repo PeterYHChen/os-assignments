@@ -216,7 +216,7 @@ int main()
                     else
                     {
                         cout << "Error: Use of '" << j->symbol << "' with an address of " << j->locations[k]
-                        << "exceeds module size. Use ignored." << endl;
+                        << " exceeds module size. Use ignored." << endl;
                     }
                 }
             }
