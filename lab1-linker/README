@@ -1,0 +1,8 @@
+In lab1, I use C++ to implement the 2-pass linker.
+<lab1-linker.cpp> is my source code file of lab1, while <test.in> is an plain text input file with input data in it.
+To compile:
+    g++ lab1-linker.cpp
+
+To run:
+    ./a.out < test.in
+
