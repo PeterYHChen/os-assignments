@@ -7,28 +7,50 @@
 
 using namespace std;
 
+enum State
+{
+    READY, BLOCKED, RUNNING
+};
+
 struct Process
 {
     int a, b, c, m;
-    int cpuBurst;
-    int ioBurst;
+    int remainCPU;
+    int remainBurst;
+    State state;
 };
 
-int randomOS(int u)
-{
-    int rand = -1;
-    ifstream randFile("random-numbers");
-    if (!randFile.is_open())
-    {
-        cout << "Error. Fail to read random-numbers" << endl;
-    }
-    else
-    {
-        rand = 1;
-    }
-    randFile.close();
+int randNums[100001];
 
-    return rand;
+int randomOS(int u, bool reset)
+{
+    static int pos = 0;
+    if (reset)
+    {
+        pos = 0;
+    }
+    return randNums[pos++] % u + 1;
+}
+
+void FCFS(vector<Process> procList, bool isVerbose)
+{
+    
+
+}
+
+void RR(vector<Process> procList, bool isVerbose)
+{
+
+}
+
+void Uniprogrammed(vector<Process> procList, bool isVerbose)
+{
+
+}
+
+void SJF(vector<Process> procList, bool isVerbose)
+{
+
 }
 
 int main(int argc, char const *argv[])
@@ -70,6 +92,19 @@ int main(int argc, char const *argv[])
         return -1;
     }
 
+    ifstream randFile("random-numbers");
+    if (!randFile.is_open())
+    {
+        cout << "Error. Fail to read file 'random-numbers'. Check current directory to ensure this file exists" << endl;
+        return -1;
+    }
+    else
+    {
+        for (int i = 0; i < 100000; i++)
+            randFile >> randNums[i];
+        randFile.close();
+    }
+
     int n;
     vector<Process> procList;
     inputFile >> n;
@@ -77,6 +112,8 @@ int main(int argc, char const *argv[])
     while (n--)
     {
         inputFile >> proc.a >> proc.b >> proc.c >> proc.m;
+        proc.remainCPU = proc.c;
+        proc.state = READY;
         procList.push_back(proc);
     }
     inputFile.close();
@@ -86,6 +123,11 @@ int main(int argc, char const *argv[])
         cout << "Process " << i - procList.begin() << ":" << endl;
         printf("    (A, B, C, M) = (%d, %d, %d, %d)\n", i->a, i->b, i->c, i->m);
     }
+
+    FCFS(procList, isVerbose);
+    RR(procList, isVerbose);
+    Uniprogrammed(procList, isVerbose);
+    SJF(procList, isVerbose);
 
     return 0;
 }
