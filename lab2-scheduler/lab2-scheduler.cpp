@@ -519,9 +519,146 @@ void Uniprogrammed(vector<Process> procList)
     printSummary(procList, blockCycleCnt/(timer-1));
 }
 
+class compare
+{
+public:
+    bool operator() (const Process* a, const Process* b) const
+    {
+        return a->remainCPU > b->remainCPU;
+    }
+};
+
 void SJF(vector<Process> procList)
 {
+    cout << endl << "The original input was: ";
+    printVector(procList);
+    cout << endl;
+    sort(procList.begin(), procList.end(), sortByArrival);
+    cout << "The (sorted) input is:  ";
+    printVector(procList);
+    cout << endl << endl;
 
+    // initialization
+    priority_queue<Process*, vector<Process*>, compare> readyQ;
+
+    // start timing
+    int timer = 0;
+    int terminatedCnt = 0;
+    double blockCycleCnt = 0;
+    while (terminatedCnt < procList.size())
+    {
+        bool isRunning = false;
+
+        if (isVerbose)
+            printf("Before cycle %3d:", timer);
+
+        // state changed after previous cycle
+        for (vector<Process>::iterator i = procList.begin(); i != procList.end(); ++i)
+        {
+            switch (i->state)
+            {
+                case UNSTARTED:
+                    if (isVerbose)
+                        printf("%15s %4d", "unstarted", 0);
+
+                    if (i->arrivalTime == 0)
+                    {
+                        i->state = READY;
+                        readyQ.push(&(*i));
+                    }
+                    break;
+
+                case READY:
+                    if (isVerbose)
+                        printf("%15s %4d", "ready", 0);
+                    break;
+                
+                case RUNNING:
+                    if (isVerbose)
+                        printf("%15s %4d", "running", i->remainCPUBurst + 1);
+
+                    if (i->remainCPU == 0)
+                    {
+                        terminatedCnt++;
+                        i->state = TERMINATED;
+                        i->finishTime = timer;
+                        i->turnaroundTime = i->finishTime - i->a;
+                    }
+                    else if (i->remainCPUBurst == 0)
+                    {
+                        i->state = BLOCKED;
+                    }
+                    else
+                        isRunning = true;
+                    break;
+                
+                case BLOCKED:
+                    if (isVerbose)
+                        printf("%15s %4d", "blocked", i->remainIOBurst + 1);
+
+                    if (i->remainIOBurst == 0)
+                    {
+                        i->state = READY;
+                        readyQ.push(&(*i));
+                    }
+                    break;
+                
+                case TERMINATED:
+                    if (isVerbose)
+                        printf("%15s %4d", "terminated", 0);
+                    break;
+            }
+        }
+
+        if (isVerbose)
+            printf("\n");
+
+        // if no running process and there are processes in the ready queue
+        if (!isRunning && !readyQ.empty())
+        {
+            // find the earliest process in the ready queue
+            Process* temp = readyQ.top();
+            readyQ.pop();
+     
+            temp->state = RUNNING;
+            int rand = randomOS(temp->b);
+            temp->remainCPUBurst = (rand > temp->remainCPU? temp->remainCPU:rand);
+            temp->remainIOBurst = temp->remainCPUBurst * temp->m;
+            // printf("remainCPUBurst: %d, remainIOBurst %d\n", temp->remainCPUBurst, temp->remainIOBurst);
+        }
+
+        // increase time count after current cycle
+        bool isBlocked = false;
+        for (vector<Process>::iterator i = procList.begin(); i != procList.end(); ++i)
+        {
+            switch (i->state)
+            {
+                case UNSTARTED:
+                    i->arrivalTime--;
+                    break;
+                case READY:
+                    i->waitingTime++;
+                    break;
+                case RUNNING:
+                    i->remainCPU--;
+                    i->remainCPUBurst--;
+                    break;
+                case BLOCKED:
+                    i->remainIOBurst--;
+                    i->ioTime++;
+                    isBlocked = true;
+                case TERMINATED:
+                    break;
+            }
+        }
+        if (isBlocked)
+            blockCycleCnt++;
+
+        timer++;
+    }
+
+    cout << endl << "The scheduling algorithm used was Shortest Job First" << endl << endl;
+    printSummary(procList, blockCycleCnt/(timer-1));
 }
 
 int main(int argc, char const *argv[])
