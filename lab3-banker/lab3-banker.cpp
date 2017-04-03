@@ -67,20 +67,45 @@ vector<Task> optimisticResourceManager(
 {
     int cycle = 0;
     int taskNum = taskList.size();
+    queue<int> pendingTasks;
+    queue<int> runningTasks;
 
-    int terminateCnt = 0;
+    // push all task-number into queue
+    for (int i = 0; i < taskNum; ++i)
+        runningTasks.push(i);
 
-    while (true)
+    // run until no tasks is either pending or running (all tasks terminate)
+    while (!pendingTasks.empty() || !runningTasks.empty())
     {
-        int waitingCnt = 0;
         Command cmd;
+        // resources to be released after current cycle
         vector<int> releaseResourceList(totalResourceList.size(), 0);
 
-        if (terminateCnt >= taskNum)
-            break;
+        // resources to be required after current cycle
+        vector<int> requiredResourceList(totalResourceList.size(), 0);
 
-        for (int i = 0; i < taskNum; ++i)
+        queue<int> tempPendingTasks;
+        queue<int> tempRunningTasks;
+
+        cout << "During " << cycle << "-" << cycle+1 << endl;
+        // run all tasks in both queue
+        while (!pendingTasks.empty() || !runningTasks.empty())
         {
+            // index of task
+            int i = 0;
+
+            // check pending queue first
+            if (!pendingTasks.empty())
+            {
+                i = pendingTasks.front();
+                pendingTasks.pop();
+            }
+            else
+            {
+                i = runningTasks.front();
+                runningTasks.pop();
+            }
+
             // no more commands for current task
             if (commandOfTask[i].empty())
                 continue;
@@ -95,22 +120,37 @@ vector<Task> optimisticResourceManager(
                     taskList[i].takenTime++;
 
                     commandOfTask[i].pop();
+
+                    tempRunningTasks.push(i);
+
+                    cout << "task " << i+1 << " completes its initiate" << endl;
                     break;
 
                 case REQUEST:
                     // if total resource of type cmd.c-1 is greater than requested
+                    taskList[i].takenTime++;
                     if (cmd.d <= totalResourceList[cmd.c-1])
                     {
                         totalResourceList[cmd.c-1] -= cmd.d;
                         taskList[i].resrcList[cmd.c-1] += cmd.d;
-                        taskList[i].takenTime++;
+                        
                         commandOfTask[i].pop();
+                        
+                        tempRunningTasks.push(i);
+
+                        cout << "task " << i+1 << " request is granted" << endl;
                     }
                     else
                     {
+                        // indicate how many resources required
+                        requiredResourceList[cmd.c-1] += cmd.d;
+
                         // not pop out the command, keep waiting
                         taskList[i].waitingTime++;
-                        waitingCnt++;
+
+                        tempPendingTasks.push(i);
+
+                        cout << "task " << i+1 << " request cannot be granted" << endl;
                     }
                     break;
 
@@ -120,21 +160,29 @@ vector<Task> optimisticResourceManager(
                     taskList[i].resrcList[cmd.c-1] -= cmd.d;
                     taskList[i].takenTime++;
                     commandOfTask[i].pop();
+                    tempRunningTasks.push(i);
+                    
+                    cout << "task " << i+1 << " release " << cmd.d << " units of type " << cmd.c << endl;
                     break;
 
                 case COMPUTE:
                     commandOfTask[i].front().c--;
+                    cout << "task " << i+1 << " computing, " << commandOfTask[i].front().c << " cycles left." << endl;
+
                     if (commandOfTask[i].front().c <= 0)
                         commandOfTask[i].pop();
 
                     taskList[i].takenTime++;
+
+                    tempRunningTasks.push(i);
                     break;
 
                 // clear commands and release its resources
                 case TERMINATE:
                     releaseResourceList = taskList[i].resrcList;
                     commandOfTask[i] = queue<Command>();
-                    terminateCnt++;
+
+                    cout << "task " << i+1 << " release all resources and terminate" << endl;
                     break;
 
                 default:
@@ -142,25 +190,67 @@ vector<Task> optimisticResourceManager(
             }
         }   
 
-        // all tasks are waiting, which means deadlock
-        if (waitingCnt >= taskNum  - terminateCnt)
-        {
-            // find the first non-terminated task to abort
-            for (int i = 0; i < taskNum; i++)
-            {
-                // skip terminated tasks
-                if (commandOfTask[i].empty())
-                    continue;
-
-                // clear commands and release its resources
-                releaseResourceList = taskList[i].resrcList;
-                commandOfTask[i] = queue<Command>();
-            }
-        }
-
+        // cout << "remaining resource at cycle: " << cycle+1 << endl;
         for (int i = 0; i < totalResourceList.size(); i++)
         {
             totalResourceList[i] += releaseResourceList[i];
+            // cout << " (" << i+1 << ": " << totalResourceList[i] << ")";
+        }
+
+        // if all tasks are waiting, which means deadlock
+        if (!tempPendingTasks.empty() && tempRunningTasks.empty())
+        {
+            for (int i = 0; i < taskNum; i++)
+            {
+                // find the non-terminated task with minimum task-number to abort
+                if (!commandOfTask[i].empty())
+                {
+                    // this must be a request command
+                    Command cmd = commandOfTask[i].front();
+
+                    // clear commands and release its resources, reduce its required resources
+                    for (int j = 0; j < totalResourceList.size(); j++)
+                        totalResourceList[j] += taskList[i].resrcList[j];
+                    requiredResourceList[cmd.c-1] -= cmd.d;
+
+                    commandOfTask[i] = queue<Command>();
+
+                    // set takenTime and waitingTime to 0 to indicate abort
+                    taskList[i].takenTime = 0;
+                    taskList[i].waitingTime = 0;
+
+                    cout << "task " << i+1 << " aborted" << endl;
+                }
+
+                bool isEnough = false;
+                // compare totalResourceList and requiredResourceList to see if it can satisfied one task to run
+                for (int j = 0; j < totalResourceList.size(); j++)
+                    if (totalResourceList[j] >= requiredResourceList[j])
+                    {
+                        isEnough = true;
+                        break;
+                    }
+
+                if (isEnough)
+                    break;
+            }
+
+            // go through pending queue and remove aborted tasks
+            while (!tempPendingTasks.empty())
+            {
+                // if task i+1 not terminated, add to the pending queue
+                int i = tempPendingTasks.front();
+                tempPendingTasks.pop();
+
+                if (!commandOfTask[i].empty())
+                    pendingTasks.push(i);                
+            }
+
+        }
+        else
+        {
+            runningTasks = tempRunningTasks;
+            pendingTasks = tempPendingTasks;
         }
 
         cycle++; 
@@ -255,7 +345,7 @@ int main(int argc, char const *argv[])
 
     // testInput(taskList, commandOfTask, totalResourceList);
     vector<Task> result = optimisticResourceManager(taskList, commandOfTask, totalResourceList);
-    cout << endl << "    FIFO    " << endl;
+    cout << endl << "          FIFO    " << endl;
     output(result);
     return 0;
 }
@@ -270,18 +360,21 @@ void output(vector<Task> taskList)
         totalTakenTime += taskList[i].takenTime;
         totalWaitingTime += taskList[i].waitingTime;
 
-        printf("Task %d", taskList[i].taskNumber);
-        if (taskList[i].takenTime >= 0)
+        printf("     Task %d", taskList[i].taskNumber);
+        if (taskList[i].takenTime > 0)
         {
             printf("%5d%5d", taskList[i].takenTime, taskList[i].waitingTime);
-            printf("%5d%%\n", 100 * taskList[i].waitingTime / (taskList[i].waitingTime + taskList[i].takenTime));
+            printf("%5d%%\n", int(0.5 + 100.0 * taskList[i].waitingTime / taskList[i].takenTime));
         }
         else
             cout << "     aborted" << endl;
     }
 
-    printf("total %5d%5d", totalTakenTime, totalWaitingTime);
-    printf("%5d%%\n\n", 100 * totalWaitingTime / (totalWaitingTime + totalTakenTime));
+    printf("     total %5d%5d", totalTakenTime, totalWaitingTime);
+    if (totalTakenTime > 0)
+        printf("%5d%%\n\n", int(100.0 * totalWaitingTime / totalTakenTime + 0.5));
+    else
+        printf("%5d%%\n\n", 0);
 }
 
 // generates input data for testing
