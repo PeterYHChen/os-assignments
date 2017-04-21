@@ -29,6 +29,7 @@ struct Process
     int refCnt;
     double A, B, C;
     int refIndex;
+    int nextRefIndex;
     int pageFault;
     double totalResidencyTime;
     int numOfEvictions;
@@ -56,7 +57,7 @@ int getRandomNumber()
     if (pos == randNums.size())
         pos = 0;
 
-    DEBUG(printf("use random number: %d\n", randNums[pos]);)
+    // DEBUG(printf("use random number: %d\n", randNums[pos]);)
     return randNums[pos++];
 }
 
@@ -90,6 +91,7 @@ void initiate(int machineSize, int pageSize, int procSize, int jobMix, int refCn
     proc.size = procSize;
     proc.refCnt = refCnt;
     proc.refIndex = -1; // indicates no referenceIndex at the beginning
+    proc.nextRefIndex -1;
     proc.pageFault = 0;
     proc.totalResidencyTime = 0;
     proc.numOfEvictions = 0;
@@ -196,7 +198,6 @@ void LRU()
     while (true)
     {
         int noRefProcessCnt = 0;
-        int nextRefIndex;
         for (vector<Process>::iterator currProc = procList.begin(); currProc != procList.end(); currProc++)
         {
             // begin round robin of quantum 3
@@ -216,7 +217,7 @@ void LRU()
                 if (currProc->refIndex < 0)
                     currProc->refIndex = (currProc->id * 111) % currProc->size;
                 else
-                    currProc->refIndex = nextRefIndex;
+                    currProc->refIndex = currProc->nextRefIndex;
 
                 int currRefPageIndex = currProc->refIndex/pageSize;
                 DEBUG(printf("Process %d references word %d (page %d) at time %d", currProc->id, currProc->refIndex, currRefPageIndex, time);)
@@ -292,17 +293,17 @@ void LRU()
 
                 // calculate the next reference index
                 double y = getRandomNumber() / (RAND_MAX + 1.0);
-                nextRefIndex = currProc->refIndex;
+                currProc->nextRefIndex = currProc->refIndex;
                 if (y < currProc->A)
-                    nextRefIndex += 1;
+                    currProc->nextRefIndex += 1;
                 else if (y < currProc->A + currProc->B)
-                    nextRefIndex -= 5;
+                    currProc->nextRefIndex += currProc->size - 5;
                 else if (y < currProc->A + currProc->B + currProc->C)
-                    nextRefIndex += 4;
+                    currProc->nextRefIndex += 4;
                 else
-                    nextRefIndex = getRandomNumber();
+                    currProc->nextRefIndex = getRandomNumber();
 
-                nextRefIndex %= currProc->size;
+                currProc->nextRefIndex %= currProc->size;
             }
         }
 
