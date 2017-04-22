@@ -11,7 +11,7 @@
 using namespace std;
 
 #ifndef DEBUGMODE
-#define DEBUGMODE true
+#define DEBUGMODE false
 #endif
 
 #ifndef D
@@ -182,12 +182,243 @@ void printSummary()
 }
 void LIFO()
 {
+     int time = 0;
+    int quantum = 3;
 
+    while (true)
+    {
+        int noRefProcessCnt = 0;
+        for (vector<Process>::iterator currProc = procList.begin(); currProc != procList.end(); currProc++)
+        {
+            // begin round robin of quantum 3
+            for (int i = 0; i < quantum; i++)
+            {
+                // no more reference of current process
+                if (currProc->refCnt <= 0)
+                {
+                    noRefProcessCnt++;
+                    break;
+                }
+                currProc->refCnt--;
+
+                time++;
+
+                // if this is the first reference, 111*k mod S
+                if (currProc->refIndex < 0)
+                    currProc->refIndex = (currProc->id * 111) % currProc->size;
+                else
+                    currProc->refIndex = currProc->nextRefIndex;
+
+                int currRefPageIndex = currProc->refIndex/pageSize;
+                DEBUG(printf("Process %d references word %d (page %d) at time %d", currProc->id, currProc->refIndex, currRefPageIndex, time);)
+
+                // if this reference index has been allocated to a frame
+                int currFrameIndex = currProc->pageToFrameIndex[currRefPageIndex];
+                if (currFrameIndex >= 0)
+                {
+                    // update referenced time of the page in frame
+                    frameTable[currFrameIndex].referencedTime = time;
+                    DEBUG(printf(" - Hit in frame %d\n", currFrameIndex);)
+                }
+                // not allocate to a frame before, page fault
+                else
+                {
+                    currProc->pageFault++;
+
+                    int targetFrameIndex;
+                    vector<Page>::iterator targetPage;
+                    // search frame table from the end to the beginning for free frame
+                    for (targetPage = frameTable.end() - 1; targetPage >= frameTable.begin(); targetPage--)
+                    {
+                        targetFrameIndex = targetPage - frameTable.begin();
+
+                        // id < 0 means found a free frame for a page
+                        if (targetPage->processId < 0)
+                        {
+                            DEBUG(printf(" - Fault, using free frame %d\n", targetFrameIndex);)
+                            break;
+                        }
+                    }
+
+                    // if frame table is full, evict a page, record residence time
+                    if (targetPage < frameTable.begin() || targetPage >= frameTable.end())
+                    {
+                        // search for the last put in page as the target page
+                        targetPage = frameTable.begin();
+                        targetFrameIndex = targetPage - frameTable.begin();
+                        int lruTime = targetPage->allocatedTime;
+
+                        for (vector<Page>::iterator currPage = frameTable.begin() + 1; currPage != frameTable.end(); currPage++)
+                        {
+                            if (lruTime < currPage->allocatedTime)
+                            {
+                                lruTime = currPage->allocatedTime;
+                                targetPage = currPage;
+                                targetFrameIndex = targetPage - frameTable.begin();
+                            }
+                        }
+
+                        DEBUG(printf(" - Fault, evicting page %d of process %d from frame %d\n", targetPage->refPageIndex, targetPage->processId, targetFrameIndex);)
+
+                        // calculate residence time
+                        procList[targetPage->processId - 1].numOfEvictions++;
+                        procList[targetPage->processId - 1].totalResidencyTime += time - targetPage->allocatedTime;
+
+                        // evict the least recently used (referenced) page
+                        procList[targetPage->processId - 1].pageToFrameIndex[targetPage->refPageIndex] = -1;
+                        targetPage->processId = -1;
+
+                    }
+
+                    // allocate page to current frame
+                    targetPage->allocatedTime = time;
+                    targetPage->referencedTime = time;
+                    targetPage->refPageIndex = currRefPageIndex;
+                    targetPage->processId = currProc->id;
+
+                    // log the page to frame index
+                    currProc->pageToFrameIndex[currRefPageIndex] = targetFrameIndex;
+
+                }
+
+                // calculate the next reference index
+                double y = getRandomNumber() / (RAND_MAX + 1.0);
+                currProc->nextRefIndex = currProc->refIndex;
+                if (y < currProc->A)
+                    currProc->nextRefIndex += 1;
+                else if (y < currProc->A + currProc->B)
+                    currProc->nextRefIndex += currProc->size - 5;
+                else if (y < currProc->A + currProc->B + currProc->C)
+                    currProc->nextRefIndex += 4;
+                else
+                    currProc->nextRefIndex = getRandomNumber();
+
+                currProc->nextRefIndex %= currProc->size;
+            }
+        }
+
+        // all references have been performed, finish lru algorithm
+        if (noRefProcessCnt == procList.size())
+            break;
+    }
+
+    // output summary
+    printSummary();
 }
 
 void RANDOM()
 {
-    
+      int time = 0;
+    int quantum = 3;
+
+    while (true)
+    {
+        int noRefProcessCnt = 0;
+        for (vector<Process>::iterator currProc = procList.begin(); currProc != procList.end(); currProc++)
+        {
+            // begin round robin of quantum 3
+            for (int i = 0; i < quantum; i++)
+            {
+                // no more reference of current process
+                if (currProc->refCnt <= 0)
+                {
+                    noRefProcessCnt++;
+                    break;
+                }
+                currProc->refCnt--;
+
+                time++;
+
+                // if this is the first reference, 111*k mod S
+                if (currProc->refIndex < 0)
+                    currProc->refIndex = (currProc->id * 111) % currProc->size;
+                else
+                    currProc->refIndex = currProc->nextRefIndex;
+
+                int currRefPageIndex = currProc->refIndex/pageSize;
+                DEBUG(printf("Process %d references word %d (page %d) at time %d", currProc->id, currProc->refIndex, currRefPageIndex, time);)
+
+                // if this reference index has been allocated to a frame
+                int currFrameIndex = currProc->pageToFrameIndex[currRefPageIndex];
+                if (currFrameIndex >= 0)
+                {
+                    // update referenced time of the page in frame
+                    frameTable[currFrameIndex].referencedTime = time;
+                    DEBUG(printf(" - Hit in frame %d\n", currFrameIndex);)
+                }
+                // not allocate to a frame before, page fault
+                else
+                {
+                    currProc->pageFault++;
+
+                    int targetFrameIndex;
+                    vector<Page>::iterator targetPage;
+                    // search frame table from the end to the beginning for free frame
+                    for (targetPage = frameTable.end() - 1; targetPage >= frameTable.begin(); targetPage--)
+                    {
+                        targetFrameIndex = targetPage - frameTable.begin();
+
+                        // id < 0 means found a free frame for a page
+                        if (targetPage->processId < 0)
+                        {
+                            DEBUG(printf(" - Fault, using free frame %d\n", targetFrameIndex);)
+                            break;
+                        }
+                    }
+
+                    // if frame table is full, evict a page, record residence time
+                    if (targetPage < frameTable.begin() || targetPage >= frameTable.end())
+                    {
+                        // randomly select a frame with a page as the target page
+                        targetFrameIndex = getRandomNumber() % frameTable.size();
+                        targetPage = frameTable.begin() + targetFrameIndex;
+
+                        DEBUG(printf(" - Fault, evicting page %d of process %d from frame %d\n", targetPage->refPageIndex, targetPage->processId, targetFrameIndex);)
+
+                        // calculate residence time
+                        procList[targetPage->processId - 1].numOfEvictions++;
+                        procList[targetPage->processId - 1].totalResidencyTime += time - targetPage->allocatedTime;
+
+                        // evict the least recently used (referenced) page
+                        procList[targetPage->processId - 1].pageToFrameIndex[targetPage->refPageIndex] = -1;
+                        targetPage->processId = -1;
+
+                    }
+
+                    // allocate page to current frame
+                    targetPage->allocatedTime = time;
+                    targetPage->referencedTime = time;
+                    targetPage->refPageIndex = currRefPageIndex;
+                    targetPage->processId = currProc->id;
+
+                    // log the page to frame index
+                    currProc->pageToFrameIndex[currRefPageIndex] = targetFrameIndex;
+
+                }
+
+                // calculate the next reference index
+                double y = getRandomNumber() / (RAND_MAX + 1.0);
+                currProc->nextRefIndex = currProc->refIndex;
+                if (y < currProc->A)
+                    currProc->nextRefIndex += 1;
+                else if (y < currProc->A + currProc->B)
+                    currProc->nextRefIndex += currProc->size - 5;
+                else if (y < currProc->A + currProc->B + currProc->C)
+                    currProc->nextRefIndex += 4;
+                else
+                    currProc->nextRefIndex = getRandomNumber();
+
+                currProc->nextRefIndex %= currProc->size;
+            }
+        }
+
+        // all references have been performed, finish lru algorithm
+        if (noRefProcessCnt == procList.size())
+            break;
+    }
+
+    // output summary
+    printSummary();
 }
 
 void LRU()
